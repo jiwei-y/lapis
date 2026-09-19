@@ -111,10 +111,96 @@
 
     <!------- Image modal --------->
     <div id="modal" class="tappable"></div>
+
+    <!-- Hidden audio sources for JS autoplay -->
+    <span id="expr-audio-text" style="display:none;">
+      {{#ExpressionAudio}}
+        {{text:ExpressionAudio}}
+      {{/ExpressionAudio}}
+    </span>
+    <span id="sent-audio-text" style="display:none;">
+      {{#SentenceAudio}}
+        {{text:SentenceAudio}}
+      {{/SentenceAudio}}
+    </span>
 </div>
 
 <!----------- Scripts ------------>
 <script>
+    function stopAllLapisAudio() {
+        if (window.lapisAudioCleanup) {
+            try { window.lapisAudioCleanup(); } catch(e) {}
+            window.lapisAudioCleanup = null;
+        }
+        if (window.lapisAudio) {
+            try {
+                window.lapisAudio.pause();
+                window.lapisAudio.currentTime = 0;
+            } catch(e) {}
+            window.lapisAudio = null;
+        }
+        if (typeof pycmd === "function") {
+            try { pycmd("stop"); } catch(e) {}
+        }
+    }
+
+    window.addEventListener("pagehide", stopAllLapisAudio);
+    window.addEventListener("beforeunload", stopAllLapisAudio);
+
+    function getAudioFilename(text) {
+        if (!text) return null;
+        const match = text.match(/\[sound:(.*?)\]/i);
+        let filename = match && match[1] ? match[1].trim() : text.trim();
+        filename = filename.replace(/^\[sound:/i, "").replace(/\]$/, "").trim();
+        return filename.length > 0 ? filename : null;
+    }
+
+    function handleBackAudio() {
+        stopAllLapisAudio();
+
+        const exprContainer = document.getElementById("expr-audio-text");
+        const sentContainer = document.getElementById("sent-audio-text");
+
+        const rawExpr = exprContainer ? exprContainer.textContent : "";
+        const rawSent = sentContainer ? sentContainer.textContent : "";
+
+        const exprFile = getAudioFilename(rawExpr);
+        const sentFile = getAudioFilename(rawSent);
+
+        if (sentFile) {
+            const audio = new Audio(encodeURI(sentFile));
+            window.lapisAudio = audio;
+
+            let canceled = false;
+            const cleanup = () => {
+                canceled = true;
+                audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            };
+            window.lapisAudioCleanup = cleanup;
+
+            const onLoadedMetadata = () => {
+                if (canceled || window.lapisAudio !== audio) return;
+                if (!isNaN(audio.duration) && audio.duration >= 2) {
+                    try { audio.currentTime = 2; } catch(e) {}
+                } else {
+                    try { audio.currentTime = 0; } catch(e) {}
+                }
+                audio.play().catch(() => {});
+            };
+
+            if (audio.readyState >= 1) {
+                onLoadedMetadata();
+            } else {
+                audio.addEventListener("loadedmetadata", onLoadedMetadata);
+                audio.load();
+            }
+        } else if (exprFile) {
+            const audio = new Audio(encodeURI(exprFile));
+            window.lapisAudio = audio;
+            audio.play().catch(() => {});
+        }
+    }
+
     // Hack to add multiple buttons without Anki playing them multiple times
     function addAudioButtons() {
         const audioContainers = document.querySelectorAll(".audio-buttons, .audio-buttons-alt");
@@ -573,6 +659,7 @@
         setDHHeight();
         hideCorrectDefinition();
         movePrimaryDicts();
+        handleBackAudio();
     }
 
     initialize();
