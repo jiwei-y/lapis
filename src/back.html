@@ -113,8 +113,16 @@
     <div id="modal" class="tappable"></div>
 
     <!-- Hidden audio sources for JS autoplay -->
-    <span id="expr-audio-text" style="display:none;">{{text:ExpressionAudio}}</span>
-    <span id="sent-audio-text" style="display:none;">{{text:SentenceAudio}}</span>
+    <span id="expr-audio-text" style="display:none;">
+      {{#ExpressionAudio}}
+        {{text:ExpressionAudio}}
+      {{/ExpressionAudio}}
+    </span>
+    <span id="sent-audio-text" style="display:none;">
+      {{#SentenceAudio}}
+        {{text:SentenceAudio}}
+      {{/SentenceAudio}}
+    </span>
 </div>
 
 <!----------- Scripts ------------>
@@ -122,19 +130,22 @@
     function getAudioFilename(text) {
         if (!text) return null;
         const match = text.match(/\[sound:(.*?)\]/);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-        const trimmed = text.trim();
-        return trimmed.length > 0 ? trimmed : null;
+        let filename = match && match[1] ? match[1].trim() : text.trim();
+        return filename.length > 0 ? filename : null;
     }
 
     function handleBackAudio() {
-        const exprAudioText = document.getElementById("expr-audio-text")?.textContent || "";
-        const sentAudioText = document.getElementById("sent-audio-text")?.textContent || "";
+        const exprContainer = document.getElementById("expr-audio-text");
+        const sentContainer = document.getElementById("sent-audio-text");
 
-        const exprFile = getAudioFilename(exprAudioText);
-        const sentFile = getAudioFilename(sentAudioText);
+        const rawExpr = exprContainer ? exprContainer.textContent : "";
+        const rawSent = sentContainer ? sentContainer.textContent : "";
+
+        if (exprContainer) exprContainer.textContent = "";
+        if (sentContainer) sentContainer.textContent = "";
+
+        const exprFile = getAudioFilename(rawExpr);
+        const sentFile = getAudioFilename(rawSent);
 
         if (sentFile) {
             const audio = new Audio(encodeURI(sentFile));
