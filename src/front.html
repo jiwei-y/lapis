@@ -59,10 +59,31 @@
 </div>
 
 <script>
+  function stopAllLapisAudio() {
+    if (window.lapisAudioCleanup) {
+      try { window.lapisAudioCleanup(); } catch(e) {}
+      window.lapisAudioCleanup = null;
+    }
+    if (window.lapisAudio) {
+      try {
+        window.lapisAudio.pause();
+        window.lapisAudio.currentTime = 0;
+      } catch(e) {}
+      window.lapisAudio = null;
+    }
+    if (typeof pycmd === "function") {
+      try { pycmd("stop"); } catch(e) {}
+    }
+  }
+
+  window.addEventListener("pagehide", stopAllLapisAudio);
+  window.addEventListener("beforeunload", stopAllLapisAudio);
+
   function getAudioFilename(text) {
     if (!text) return null;
-    const match = text.match(/\[sound:(.*?)\]/);
+    const match = text.match(/\[sound:(.*?)\]/i);
     let filename = match && match[1] ? match[1].trim() : text.trim();
+    filename = filename.replace(/^\[sound:/i, "").replace(/\]$/, "").trim();
     return filename.length > 0 ? filename : null;
   }
 
@@ -75,43 +96,57 @@
     const isStandard = !isSentenceCard && !isWordAndSentenceCard && !isClickCard && !isAudioCard;
     if (!isStandard && !isWordAndSentenceCard) return;
 
-    // Mask raw [sound:] tags in hidden elements to prevent native Anki autoplay
+    stopAllLapisAudio();
+
     const exprContainer = document.getElementById("expr-audio-text");
     const sentContainer = document.getElementById("sent-audio-text");
 
     const rawExpr = exprContainer ? exprContainer.textContent : "";
     const rawSent = sentContainer ? sentContainer.textContent : "";
 
-    if (exprContainer) exprContainer.textContent = "";
-    if (sentContainer) sentContainer.textContent = "";
-
     const exprFile = getAudioFilename(rawExpr);
     const sentFile = getAudioFilename(rawSent);
 
     if (exprFile) {
       const audio = new Audio(encodeURI(exprFile));
+      window.lapisAudio = audio;
       audio.play().catch(() => {});
     } else if (sentFile) {
       const audio = new Audio(encodeURI(sentFile));
-      const checkAndPlay = () => {
+      window.lapisAudio = audio;
+
+      let canceled = false;
+      const cleanup = () => {
+        canceled = true;
+        audio.removeEventListener("timeupdate", onTimeUpdate);
+        audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      };
+      window.lapisAudioCleanup = cleanup;
+
+      const onTimeUpdate = () => {
+        if (canceled) return;
+        if (audio.currentTime >= 2) {
+          audio.pause();
+          cleanup();
+          window.lapisAudio = null;
+        }
+      };
+
+      const onLoadedMetadata = () => {
+        if (canceled || window.lapisAudio !== audio) return;
         if (isNaN(audio.duration) || audio.duration < 2) {
+          window.lapisAudio = null;
           return;
         }
         audio.currentTime = 0;
-        const onTimeUpdate = () => {
-          if (audio.currentTime >= 2) {
-            audio.pause();
-            audio.removeEventListener("timeupdate", onTimeUpdate);
-          }
-        };
         audio.addEventListener("timeupdate", onTimeUpdate);
         audio.play().catch(() => {});
       };
 
       if (audio.readyState >= 1) {
-        checkAndPlay();
+        onLoadedMetadata();
       } else {
-        audio.addEventListener("loadedmetadata", checkAndPlay);
+        audio.addEventListener("loadedmetadata", onLoadedMetadata);
         audio.load();
       }
     }
