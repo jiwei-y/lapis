@@ -111,10 +111,54 @@
 
     <!------- Image modal --------->
     <div id="modal" class="tappable"></div>
+
+    <!-- Hidden audio sources for JS autoplay -->
+    <span id="expr-audio-text" style="display:none;">{{text:ExpressionAudio}}</span>
+    <span id="sent-audio-text" style="display:none;">{{text:SentenceAudio}}</span>
 </div>
 
 <!----------- Scripts ------------>
 <script>
+    function getAudioFilename(text) {
+        if (!text) return null;
+        const match = text.match(/\[sound:(.*?)\]/);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        const trimmed = text.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    }
+
+    function handleBackAudio() {
+        const exprAudioText = document.getElementById("expr-audio-text")?.textContent || "";
+        const sentAudioText = document.getElementById("sent-audio-text")?.textContent || "";
+
+        const exprFile = getAudioFilename(exprAudioText);
+        const sentFile = getAudioFilename(sentAudioText);
+
+        if (sentFile) {
+            const audio = new Audio(encodeURI(sentFile));
+            const checkAndPlay = () => {
+                if (isNaN(audio.duration) || audio.duration < 2) {
+                    audio.currentTime = 0;
+                } else {
+                    audio.currentTime = 2;
+                }
+                audio.play().catch(() => {});
+            };
+
+            if (audio.readyState >= 1) {
+                checkAndPlay();
+            } else {
+                audio.addEventListener("loadedmetadata", checkAndPlay);
+                audio.load();
+            }
+        } else if (exprFile) {
+            const audio = new Audio(encodeURI(exprFile));
+            audio.play().catch(() => {});
+        }
+    }
+
     // Hack to add multiple buttons without Anki playing them multiple times
     function addAudioButtons() {
         const audioContainers = document.querySelectorAll(".audio-buttons, .audio-buttons-alt");
@@ -573,6 +617,7 @@
         setDHHeight();
         hideCorrectDefinition();
         movePrimaryDicts();
+        handleBackAudio();
     }
 
     initialize();

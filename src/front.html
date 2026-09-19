@@ -44,9 +44,63 @@
     <div id="hint">{{Hint}}</div>
     {{/Hint}}
     </main>
+
+    <!-- Hidden audio sources for JS autoplay -->
+    <span id="expr-audio-text" style="display:none;">{{text:ExpressionAudio}}</span>
+    <span id="sent-audio-text" style="display:none;">{{text:SentenceAudio}}</span>
 </div>
 
 <script>
+  function getAudioFilename(text) {
+    if (!text) return null;
+    const match = text.match(/\[sound:(.*?)\]/);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+    const trimmed = text.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  function handleFrontAudio() {
+    const isStandard = !`{{IsSentenceCard}}` && !`{{IsWordAndSentenceCard}}` && !`{{IsClickCard}}` && !`{{IsAudioCard}}`;
+    const isWordAndSentence = Boolean(`{{IsWordAndSentenceCard}}`);
+    if (!isStandard && !isWordAndSentence) return;
+
+    const exprAudioText = document.getElementById("expr-audio-text")?.textContent || "";
+    const sentAudioText = document.getElementById("sent-audio-text")?.textContent || "";
+
+    const exprFile = getAudioFilename(exprAudioText);
+    const sentFile = getAudioFilename(sentAudioText);
+
+    if (exprFile) {
+      const audio = new Audio(encodeURI(exprFile));
+      audio.play().catch(() => {});
+    } else if (sentFile) {
+      const audio = new Audio(encodeURI(sentFile));
+      const checkAndPlay = () => {
+        if (isNaN(audio.duration) || audio.duration < 2) {
+          return;
+        }
+        audio.currentTime = 0;
+        const onTimeUpdate = () => {
+          if (audio.currentTime >= 2) {
+            audio.pause();
+            audio.removeEventListener("timeupdate", onTimeUpdate);
+          }
+        };
+        audio.addEventListener("timeupdate", onTimeUpdate);
+        audio.play().catch(() => {});
+      };
+
+      if (audio.readyState >= 1) {
+        checkAndPlay();
+      } else {
+        audio.addEventListener("loadedmetadata", checkAndPlay);
+        audio.load();
+      }
+    }
+  }
+
   function ClickCard() {
     const clickElement = document.getElementById("click");
 
@@ -79,6 +133,7 @@
     // Check what card type it is
     if (`{{IsClickCard}}`) ClickCard();
     if (`{{IsAudioCard}}`) HideTargetWord();
+    handleFrontAudio();
   }
 
   initialize();
